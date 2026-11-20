@@ -1,0 +1,89 @@
+name: fribb-sync
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fribb-sync
+  cancel-in-progress: false
+
+env:
+  FRIBB_URL: https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch fresh Fribb dataset
+        run: |
+          mkdir -p "${RUNNER_TEMP}/fribb"
+          curl -fsSL "${FRIBB_URL}" -o "${RUNNER_TEMP}/fribb/fresh.json"
+          python3 -c "import json; d=json.load(open('${RUNNER_TEMP}/fribb/fresh.json')); print(f'fresh entries: {len(d)}')"
+
+      - name: Download previous release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/fribb/old"
+          gh release download data \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern full.json \
+            --dir "${RUNNER_TEMP}/fribb/old" \
+            || echo "no previous full.json (first run?)"
+          gh release download data \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern meta.json \
+            --dir "${RUNNER_TEMP}/fribb/old" \
+            || echo "no previous meta.json (first run?)"
+
+      - name: Merge and build outputs
+        run: |
+          set -o pipefail
+          python3 scripts/sync.py \
+            --fresh "${RUNNER_TEMP}/fribb/fresh.json" \
+            --old-full "${RUNNER_TEMP}/fribb/old/full.json" \
+            --old-meta "${RUNNER_TEMP}/fribb/old/meta.json" \
+            --overrides data/overrides.json \
+            --out-full "${RUNNER_TEMP}/fribb/out/full.json" \
+            --out-delta "${RUNNER_TEMP}/fribb/out/delta.json" \
+            --out-meta "${RUNNER_TEMP}/fribb/out/meta.json" \
+            2>&1 | tee "${RUNNER_TEMP}/fribb/sync.log"
+
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view data --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 \
+            || gh release create data \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "data" \
+              --notes "Cumulative Fribb anime-mapping snapshot"
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload data \
+            "${RUNNER_TEMP}/fribb/out/full.json" \
+            "${RUNNER_TEMP}/fribb/out/delta.json" \
+            "${RUNNER_TEMP}/fribb/out/meta.json" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+
+      - name: Append sync summary (including dropped_ids)
+        run: |
+          {
+            echo "## Fribb sync summary"
+            echo
+            echo '```'
+            cat "${RUNNER_TEMP}/fribb/sync.log"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
