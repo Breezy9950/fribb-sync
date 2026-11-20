@@ -156,7 +156,7 @@ def main(argv=None):
     full, delta, meta, dropped_ids = sync(fresh, old_full, old_meta, overrides)
 
     save_json(args.out_full, full, compact=True)
-    save_json(args.out_delta, delta)
+    save_json(args.out_delta, delta, compact=True)
     save_json(args.out_meta, meta)
 
     eprint(f"fribb-sync: old entries: {len(old_full)}")
