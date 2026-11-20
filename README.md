@@ -1,14 +1,11 @@
 # fribb-sync
 
-A standalone data pipeline that mirrors the upstream
+A data pipeline that mirrors the upstream
 [Fribb anime-lists](https://github.com/Fribb/anime-lists) dataset into a
 **cumulative, monotonic** store and publishes a daily delta describing what
-changed. It contains no application code and serves no application directly;
-its only job is to consume the upstream dataset, maintain a stable cumulative
-copy, and publish the change set.
-
-The pipeline runs on GitHub Actions. Upstream data is fetched **only inside the
-workflow runner**, never by this repository's local tooling.
+changed. Its job is to consume the upstream dataset, maintain a stable
+cumulative copy, and publish the change set. It runs on GitHub Actions; upstream
+data is fetched only inside the workflow runner.
 
 ## Published files
 

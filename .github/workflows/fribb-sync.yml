@@ -2,7 +2,7 @@ name: fribb-sync
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '0 12 * * *'  # Runs once daily at 12:00 UTC
   workflow_dispatch:
 
 permissions:
